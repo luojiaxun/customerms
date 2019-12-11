@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" 
+     "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="core.dao.OrderDao">
+    <!--SQL片段  -->
+  <!--   //这里不用加表的别名 -->
+    <sql id="selectOrderListWhere">
+        <where>
+	       <if test="payer_name != null" >
+	       payer_id in (select cust_id from customer where cust_name = #{payer_name} )
+	       </if>
+	       <if test="fee_type != null" >
+	        and fee_type = #{fee_type}
+	       </if>
+	       <if test="order_username != null" >
+	        and order_userid in (select user_id from user where user_name = #{order_username} )
+	       </if>
+        </where>
+    </sql>
+	<!-- 查询订单列表  -->
+	<select id="selectOrderList" parameterType="order" resultType="order">
+		SELECT
+			order_id,
+			create_time,
+			end_time,
+			fee,
+			b.dict_item_name fee_type,
+			d.user_name order_username,
+			c.cust_name payer_name
+		FROM
+			orders a
+		LEFT JOIN (
+			SELECT
+				dict_id,
+				dict_item_name
+			FROM
+				base_dict
+			WHERE
+				dict_type_code = '003'
+		) b ON a.fee_type = b.dict_id 
+		join customer c on a.payer_id = c.cust_id
+		join user d on d.user_id=a.order_userid		
+	<include refid="selectOrderListWhere"/>
+		<!-- 执行分页查询 -->
+		<if test="start !=null and rows != null">
+			limit #{start},#{rows}
+		</if>
+	</select>
+	
+	<!-- 通过客户名字查询客户id、通过经办人名字查询用户id -->
+	<select id="selectUserAndPayerId" parameterType="order" resultType="order">
+		select user_id order_userid,cust_id payer_id from user,customer where 1=1 and cust_name=#{payer_name} and user_name=#{order_username}  
+	</select>
+	
+	<!-- 通过id查询订单信息 -->
+	<select id="getOrderById" parameterType="Int" resultType="order">
+		SELECT
+			order_id,
+			create_time,
+			end_time,
+			fee,
+			fee_type,
+			d.user_name order_username,
+			c.cust_name payer_name
+		FROM
+			orders a
+		join customer c on a.payer_id = c.cust_id
+		join user d on d.user_id=a.order_userid
+		where a.order_id=#{id}
+	</select>
+	
+	<!-- 修改订单 -->	
+	<update id="updateOrder" parameterType="order">
+	 update orders
+	    <set>
+	        <if test="payer_name!=null">
+	            payer_id=(select cust_id from customer where cust_name=#{payer_name}),
+	        </if>
+	        <if test="order_username!=null">
+	            order_userid=(select user_id from user where user_name=#{order_username}),
+	        </if>
+	        <if test="create_time_str!=null">
+	            create_time=#{create_time_str},
+	        </if>	     
+	        <if test="end_time_str!=null">
+	            end_time=#{end_time_str},
+	        </if>
+	        <if test="fee_type!=null">
+	            fee_type=#{fee_type},
+	        </if>
+	          <if test="fee!=null">
+	            fee=#{fee},
+	        </if>
+	    </set>
+	    where order_id=#{order_id}
+	</update>	
+	
+	<!-- 查询订单总数 -->
+	<select id="selectOrderListCount" parameterType="order" resultType="Integer">
+		select count(*) from orders
+		<include refid="selectOrderListWhere"/>
+	</select>
+	
+	<!-- 新建订单 -->
+	<insert id="createOrder" parameterType="order">
+	    insert into orders(
+	                     fee,
+	                     fee_type,
+	                     create_time,
+	                     end_time,
+	                     order_userid,
+	                     payer_id
+	             )
+	             values(
+	             		#{fee},
+	                    #{fee_type},
+	                    #{create_time_str},
+	                    #{end_time_str},
+	                    #{order_userid},
+	                    #{payer_id}
+	            )
+	</insert>
+	<!-- 删除订单 -->
+	<delete id="deleteOrder" parameterType="Int">
+	delete from orders where order_id=#{order_id}
+	</delete>
+	
+	<!-- 续月 -->
+	<update id="addMonth" parameterType="Int">
+	update orders set end_time = DATE_ADD(end_time,INTERVAL 1 MONTH),fee=fee+50 where order_id=#{id}
+	</update>
+	
+	<!-- 续年 -->
+	<update id="addYear" parameterType="Int">
+	update orders set end_time = DATE_ADD(end_time,INTERVAL 1 YEAR),fee=fee+600,fee_type=6 where order_id=#{id};
+	</update>
+	
+	<!-- 统计 -->
+	<select id="countOrder" parameterType="order" resultType="order">
+	
+	select  SUM(fee) fee from orders where create_time &gt;= #{create_time_str} and end_time &lt;= #{end_time_str};
+	
+	</select>
+</mapper>
